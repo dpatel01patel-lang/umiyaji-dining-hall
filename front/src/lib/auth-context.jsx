@@ -28,6 +28,19 @@ export const AuthProvider = ({ children }) => {
         if (token && storedUserProfile) {
           const profile = JSON.parse(storedUserProfile);
           
+          // Only verify token if it's been more than 24 hours or if we're on a critical route
+          const lastVerify = localStorage.getItem('last_auth_verify');
+          const now = Date.now();
+          const twentyFourHours = 24 * 60 * 60 * 1000;
+          
+          // Skip verification if recently verified and not on a protected route
+          if (lastVerify && (now - parseInt(lastVerify)) < twentyFourHours) {
+            setCurrentUser(profile);
+            setUserProfile(profile);
+            setLoading(false);
+            return;
+          }
+          
           // Verify token is still valid
           const response = await fetch(getApiUrl("auth/verify"), {
             headers: {
@@ -42,16 +55,19 @@ export const AuthProvider = ({ children }) => {
               ...profile,
               token: token
             });
+            localStorage.setItem('last_auth_verify', now.toString());
           } else {
             // Token is invalid, clear stored data
             localStorage.removeItem('auth_token');
             localStorage.removeItem('user_profile');
+            localStorage.removeItem('last_auth_verify');
           }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_profile');
+        localStorage.removeItem('last_auth_verify');
       } finally {
         setLoading(false);
       }

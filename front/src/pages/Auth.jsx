@@ -17,101 +17,96 @@ export default function Auth() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  
+  const [submitError, setSubmitError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent double submissions
+    if (loading) return;
+    
     setLoading(true);
+    setSubmitError("");
 
     try {
       // Validate inputs
       if (!phone || !password) {
-        showError("Please fill in all fields", 'Auth');
+        setSubmitError("Please fill in all fields");
         setLoading(false);
         return;
       }
 
       if (!isLogin && !name) {
-        showError("Name is required", 'Auth');
+        setSubmitError("Name is required for registration");
         setLoading(false);
         return;
       }
 
-      if (isLogin) {
-        // Login - verify user exists in database
-        try {
-          const response = await fetch(getApiUrl("auth/login"), {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ phone, password }),
-          });
-
-          let data;
-          try {
-            data = await response.json();
-          } catch (parseError) {
-            showError("Server error: Invalid response format", 'Auth Login');
-            setLoading(false);
-            return;
-          }
-
-          if (!response.ok) {
-            showError(data.error || "Login failed", 'Auth Login');
-            setLoading(false);
-            return;
-          }
-
-          updateUserProfile(data.data);
-          navigate(data.data.user.role === "owner" ? "/admin" : "/dashboard");
-        } catch (networkError) {
-          showError("Network error: Unable to connect to server", 'Auth Login');
-          setLoading(false);
-          return;
-        }
-      } else {
-        // Register new user
-        try {
-          const response = await fetch(getApiUrl("auth/register"), {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              name,
-              phone,
-              password,
-              role: userType,
-              ...(email && { email }) // Only include email if provided
-            }),
-          });
-
-          let data;
-          try {
-            data = await response.json();
-          } catch (parseError) {
-            showError("Server error: Invalid response format", 'Auth Login');
-            setLoading(false);
-            return;
-          }
-
-          if (!response.ok) {
-            showError(data.error || "Registration failed", 'Auth Registration');
-            setLoading(false);
-            return;
-          }
-
-          updateUserProfile(data.data);
-          navigate(data.data.user.role === "owner" ? "/admin" : "/dashboard");
-        } catch (networkError) {
-          showError("Network error: Unable to connect to server", 'Auth Login');
-          setLoading(false);
-          return;
-        }
+      // Phone validation
+      const phoneRegex = /^\+?[\d\s\-\(\)]{10,}$/;
+      if (!phoneRegex.test(phone)) {
+        setSubmitError("Please enter a valid phone number");
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      showError(err, 'Auth');
+
+      // Password validation
+      if (password.length < 4) {
+        setSubmitError("Password must be at least 4 characters long");
+        setLoading(false);
+        return;
+      }
+
+      const endpoint = isLogin ? "auth/login" : "auth/register";
+      const requestBody = isLogin
+        ? { phone, password }
+        : {
+            name,
+            phone,
+            password,
+            role: userType,
+            ...(email && { email })
+          };
+
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(getApiUrl(endpoint), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        setSubmitError("Server response error. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      if (!response.ok) {
+        setSubmitError(data.error || (isLogin ? "Login failed" : "Registration failed"));
+        setLoading(false);
+        return;
+      }
+
+      updateUserProfile(data.data);
+      navigate(data.data.user.role === "owner" ? "/admin" : "/dashboard");
+      
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        setSubmitError("Request timeout. Please check your connection and try again.");
+      } else {
+        setSubmitError("Network error. Please check your connection and try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -135,20 +130,28 @@ export default function Auth() {
           </p>
         </div>
 
+        {/* Error Message */}
+        {submitError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-red-600 text-sm text-center">{submitError}</p>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
           {!isLogin && (
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Full Name
+                  Full Name *
                 </label>
                 <Input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your full name"
-                  className="rounded-xl h-10 sm:h-12 text-sm sm:text-base"
+                  disabled={loading}
+                  className="rounded-xl h-10 sm:h-12 text-sm sm:text-base disabled:opacity-60"
                 />
               </div>
 
@@ -161,7 +164,8 @@ export default function Auth() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your.email@example.com"
-                  className="rounded-xl h-10 sm:h-12 text-sm sm:text-base"
+                  disabled={loading}
+                  className="rounded-xl h-10 sm:h-12 text-sm sm:text-base disabled:opacity-60"
                 />
               </div>
             </>
@@ -169,38 +173,45 @@ export default function Auth() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Phone Number
+              Phone Number *
             </label>
             <Input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+1 (555) 123-4567"
-              className="rounded-xl h-10 sm:h-12 text-sm sm:text-base"
+              disabled={loading}
+              className="rounded-xl h-10 sm:h-12 text-sm sm:text-base disabled:opacity-60"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Password
+              Password *
             </label>
             <Input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="rounded-xl h-10 sm:h-12 text-sm sm:text-base"
+              disabled={loading}
+              className="rounded-xl h-10 sm:h-12 text-sm sm:text-base disabled:opacity-60"
             />
           </div>
-
-          
 
           <Button
             type="submit"
             disabled={loading}
-            className="w-full h-10 sm:h-12 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 bg-blue-600 hover:bg-blue-700 text-sm sm:text-base"
+            className="w-full h-10 sm:h-12 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none bg-blue-600 hover:bg-blue-700 text-sm sm:text-base"
           >
-            {loading ? "Processing..." : isLogin ? "Sign In" : "Create Account"}
+            {loading ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span>Processing...</span>
+              </div>
+            ) : (
+              isLogin ? "Sign In" : "Create Account"
+            )}
           </Button>
         </form>
 

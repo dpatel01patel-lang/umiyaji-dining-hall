@@ -1,5 +1,9 @@
 import { getApiUrl } from "./config";
 
+// Simple in-memory cache for API responses
+const apiCache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 // Helper function to get auth headers
 const getAuthHeaders = () => {
   const token = localStorage.getItem('auth_token');
@@ -14,17 +18,92 @@ const getAuthHeaders = () => {
   return headers;
 };
 
-// Helper function to make authenticated requests
-const authenticatedFetch = (url, options = {}) => {
+// Helper function to make authenticated requests with caching
+const authenticatedFetch = async (url, options = {}) => {
   const headers = {
     ...getAuthHeaders(),
     ...options.headers
   };
   
-  return fetch(url, {
-    ...options,
-    headers
-  });
+  // Generate cache key for GET requests
+  if (options.method === 'GET' || !options.method) {
+    const cacheKey = url + JSON.stringify(options.params || {});
+    const cached = apiCache.get(cacheKey);
+    
+    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+      return {
+        ok: true,
+        json: () => Promise.resolve(cached.data),
+        _fromCache: true
+      };
+    }
+  }
+  
+  // Set timeout to prevent infinite loading
+  const timeoutId = setTimeout(() => {
+    throw new Error('Request timeout');
+  }, options.timeout || 15000); // 15 second default timeout
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      signal: options.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    // Cache successful GET responses
+    if (response.ok && (options.method === 'GET' || !options.method)) {
+      try {
+        const data = await response.clone().json();
+        const cacheKey = url + JSON.stringify(options.params || {});
+        apiCache.set(cacheKey, {
+          data: data,
+          timestamp: Date.now()
+        });
+        
+        // Limit cache size
+        if (apiCache.size > 50) {
+          const firstKey = apiCache.keys().next().value;
+          apiCache.delete(firstKey);
+        }
+      } catch (e) {
+        // Ignore JSON parsing errors for caching
+      }
+    }
+    
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    // Return a response-like object for timeout errors
+    if (error.message === 'Request timeout') {
+      return {
+        ok: false,
+        status: 408,
+        json: () => Promise.resolve({
+          success: false,
+          error: 'Request timeout. Please try again.'
+        })
+      };
+    }
+    
+    // Return a response-like object for network errors
+    return {
+      ok: false,
+      status: 0,
+      json: () => Promise.resolve({
+        success: false,
+        error: 'Network error. Please check your connection.'
+      })
+    };
+  }
+};
+
+// Helper function to clear cache
+export const clearApiCache = () => {
+  apiCache.clear();
 };
 
 export const Meal = {

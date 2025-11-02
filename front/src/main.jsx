@@ -1,5 +1,6 @@
 import "./global.css";
 
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { createRoot } from "react-dom/client";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -33,14 +34,39 @@ import StudentSubscriptionsPage from "./pages/student/StudentSubscriptionsPage";
 import AdminLayout from "./components/AdminLayout";
 import StudentLayout from "./components/StudentLayout";
 
-const LoadingPage = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-orange-50 to-white">
-    <div className="text-center">
-      <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
-      <p className="mt-4 text-gray-600">Loading...</p>
+const LoadingPage = () => {
+  const [loadingText, setLoadingText] = React.useState("Loading...");
+  
+  React.useEffect(() => {
+    const texts = [
+      "Loading menu...",
+      "Loading orders...",
+      "Loading attendance...",
+      "Loading bills...",
+      "Loading notifications..."
+    ];
+    
+    let index = 0;
+    const interval = setInterval(() => {
+      setLoadingText(texts[index]);
+      index = (index + 1) % texts.length;
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-orange-50 to-white">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+        <p className="mt-4 text-gray-600 transition-all duration-500">{loadingText}</p>
+        <div className="mt-4 w-48 mx-auto bg-gray-200 rounded-full h-2">
+          <div className="bg-orange-500 h-2 rounded-full animate-pulse" style={{width: "100%"}}></div>
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // Protected Route component
 const ProtectedRoute = ({ children, allowedRoles = ["owner", "admin"] }) => {
