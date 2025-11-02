@@ -1,0 +1,211 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const { WebSocketServer } = require('ws');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 8000;
+
+// Security middleware
+app.use(helmet());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+}));
+app.use(morgan('combined'));
+
+// Rate limiting
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // limit each IP to 100 requests per windowMs
+//   message: 'Too many requests from this IP, please try again later.'
+// });
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.'
+});
+app.use('/api/', limiter);
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Database connection
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/dining_hall', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+mongoose.connection.on('connected', () => {
+  console.log('✅ Connected to MongoDB database');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB connection error:', err);
+});
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const mealsRoutes = require('./routes/meals');
+const ordersRoutes = require('./routes/orders');
+const subscriptionsRoutes = require('./routes/subscriptions');
+const clientsRoutes = require('./routes/clients');
+const attendanceRoutes = require('./routes/attendance');
+const billsRoutes = require('./routes/bills');
+const analyticsRoutes = require('./routes/analytics');
+const notificationsRoutes = require('./routes/notifications');
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/meals', mealsRoutes);
+app.use('/api/orders', ordersRoutes);
+app.use('/api/subscriptions', subscriptionsRoutes);
+app.use('/api/clients', clientsRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/bills', billsRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/notifications', notificationsRoutes);
+
+// WebSocket setup for real-time features
+const server = app.listen(PORT, () => {
+  console.log('🚀 Server running on port ' + PORT);
+  console.log('📝 API Documentation: http://localhost:' + PORT + '/api/docs');
+  console.log('🏥 Health Check: http://localhost:' + PORT + '/health');
+});
+
+// WebSocket Server for real-time notifications
+const wss = new WebSocketServer({ server });
+
+// Store connected clients
+const clients = new Map();
+
+wss.on('connection', (ws) => {
+  console.log('📡 New WebSocket connection established');
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      if (data.type === 'auth' && data.token) {
+        // Store client with their user ID
+        clients.set(ws, data.userId);
+        ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket authenticated' }));
+      }
+    } catch (error) {
+      console.error('WebSocket message error:', error);
+    }
+  });
+
+  ws.on('close', () => {
+    clients.delete(ws);
+    console.log('📴 WebSocket connection closed');
+  });
+
+  ws.on('error', (error) => {
+    console.error('❌ WebSocket error:', error);
+    clients.delete(ws);
+  });
+});
+
+// Utility function to send notifications to specific users
+const sendNotificationToUser = (userId, notification) => {
+  for (const [ws, clientId] of clients.entries()) {
+    if (clientId === userId) {
+      try {
+        ws.send(JSON.stringify({ type: 'notification', data: notification }));
+      } catch (error) {
+        console.error('Error sending notification:', error);
+      }
+    }
+  }
+};
+
+// Make sendNotificationToUser available globally
+global.sendNotificationToUser = sendNotificationToUser;
+
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'API endpoint not found',
+    path: req.path
+  });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('❌ Global error handler:', err);
+
+  // Mongoose validation error
+  if (err.name === 'ValidationError') {
+    const errors = Object.values(err.errors).map(val => val.message);
+    return res.status(400).json({
+      success: false,
+      message: 'Validation Error',
+      errors: errors
+    });
+  }
+
+  // Mongoose duplicate key error
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyValue)[0];
+    return res.status(400).json({
+      success: false,
+      message: field + ' already exists'
+    });
+  }
+
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Token expired'
+    });
+  }
+
+  // Default server error
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { error: err.message })
+  });
+});
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Graceful shutdown initiated...');
+  
+  // Close WebSocket connections
+  wss.clients.forEach((ws) => {
+    ws.close();
+  });
+  
+  // Close MongoDB connection
+  await mongoose.connection.close();
+  
+  console.log('✅ Server shutdown complete');
+  process.exit(0);
+});
+
+module.exports = app;
