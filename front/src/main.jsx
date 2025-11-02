@@ -6,38 +6,32 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
-
-// Lazy load pages to reduce initial bundle size
-const Auth = lazy(() => import("./pages/Auth"));
-const AdminPanel = lazy(() => import("./pages/AdminPanel"));
-const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
+import AdminPanel from "./pages/AdminPanel";
+import NotificationsPage from "./pages/NotificationsPage";
 
 // Admin page components
-const MenuPage = lazy(() => import("./pages/admin/MenuPage"));
-const OrdersPage = lazy(() => import("./pages/admin/OrdersPage"));
-const AttendancePage = lazy(() => import("./pages/admin/AttendancePage"));
-const AnalyticsPage = lazy(() => import("./pages/admin/AnalyticsPage"));
-const SubscriptionsPage = lazy(() => import("./pages/admin/SubscriptionsPage"));
-const BillingPage = lazy(() => import("./pages/admin/BillingPage"));
-const ClientsPage = lazy(() => import("./pages/admin/ClientsPage"));
+import MenuPage from "./pages/admin/MenuPage";
+import OrdersPage from "./pages/admin/OrdersPage";
+import AttendancePage from "./pages/admin/AttendancePage";
+import AnalyticsPage from "./pages/admin/AnalyticsPage";
+import SubscriptionsPage from "./pages/admin/SubscriptionsPage";
+import BillingPage from "./pages/admin/BillingPage";
+import ClientsPage from "./pages/admin/ClientsPage";
 
 // Student page components
-const StudentMenuPage = lazy(() => import("./pages/student/StudentMenuPage"));
-const StudentAttendancePage = lazy(
-  () => import("./pages/student/StudentAttendancePage"),
-);
-const StudentBillsPage = lazy(() => import("./pages/student/StudentBillsPage"));
-const StudentSubscriptionsPage = lazy(
-  () => import("./pages/student/StudentSubscriptionsPage"),
-);
+import StudentMenuPage from "./pages/student/StudentMenuPage";
+import StudentAttendancePage from "./pages/student/StudentAttendancePage";
+import StudentBillsPage from "./pages/student/StudentBillsPage";
+import StudentSubscriptionsPage from "./pages/student/StudentSubscriptionsPage";
 
 // Layout wrappers
-const AdminLayout = lazy(() => import("./components/AdminLayout"));
-const StudentLayout = lazy(() => import("./components/StudentLayout"));
+import AdminLayout from "./components/AdminLayout";
+import StudentLayout from "./components/StudentLayout";
 
 const LoadingPage = () => (
   <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-orange-50 to-white">
