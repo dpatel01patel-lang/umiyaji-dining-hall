@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "build": "mkdir -p dist && cp -r middleware models routes server.js package.json dist/ && echo 'Build completed successfully'",
     "test": "node test-api.js"
   },
   "keywords": [
