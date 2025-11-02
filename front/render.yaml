@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: umiya-dining-frontend
+    env: static
+    plan: free
+    buildCommand: npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://umiya-dining-backend.onrender.com
