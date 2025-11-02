@@ -4,11 +4,15 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 const { WebSocketServer } = require('ws');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;
+
+// Trust proxy for proper IP detection behind load balancers/proxies
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
@@ -168,6 +172,15 @@ app.use('/api/*', (req, res) => {
     message: 'API endpoint not found',
     path: req.path
   });
+});
+
+// Serve React app for all non-API routes (SPA fallback)
+// This handles direct page refreshes on routes like /admin/analytics
+app.get('*', (req, res) => {
+  // Only serve index.html for HTML requests (not for API calls, images, etc.)
+  if (req.accepts('html') && !req.path.startsWith('/api/')) {
+    res.sendFile(path.join(__dirname, '../front/dist/index.html'));
+  }
 });
 
 // Global error handler
