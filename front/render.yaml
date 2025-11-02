@@ -7,4 +7,4 @@ services:
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        value: https://umiya-dining-backend.onrender.com
+        value: https://umiya-dining-hall-backend.onrender.com

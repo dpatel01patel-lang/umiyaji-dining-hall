@@ -38,11 +38,11 @@ const developmentConfig = {
 // Production configuration
 const productionConfig = {
   api: {
-    baseUrl: "https://umiyaji-dining-hall.onrender.com/api",
+    baseUrl: "https://umiya-dining-hall-backend.onrender.com/api",
     timeout: 15000,   // 15 seconds for production
   },
   websocket: {
-    url: "wss://umiyaji-dining-hall.onrender.com/ws",  // Secure WebSocket for production
+    url: "wss://umiya-dining-hall-backend.onrender.com/ws",  // Secure WebSocket for production
     reconnectAttempts: 5,
     reconnectDelay: 1000,
   },
