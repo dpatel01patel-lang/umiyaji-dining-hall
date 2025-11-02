@@ -15,3 +15,5 @@ services:
         fromDatabase:
           name: umiya-dining-mongo
           property: connectionString
+      - key: FRONTEND_URL
+        value: https://umiyaji-dining-hall-f.onrender.com
